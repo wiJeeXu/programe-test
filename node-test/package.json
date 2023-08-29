@@ -3,13 +3,16 @@
   "version": "1.0.0",
   "description": "",
   "main": "index2.js",
+  "type": "commonjs",
   "scripts": {
-    "dev": "node index2"
+    "dev": "node index"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "esprima": "^4.0.1"
+    "axios": "^1.5.0",
+    "esprima": "^4.0.1",
+    "xlsx": "^0.18.5"
   }
 }
