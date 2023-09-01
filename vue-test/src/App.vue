@@ -1,52 +1,75 @@
 <template>
-  <div>
-    <draggable
-      class="list-group"
-      :list="list1"
-      :group="{ name: 'people', pull: 'clone', put: false }"
-      @change="log"
-      itemKey="name"
-    >
-      <template #item="{ element, index }">
-        <div class="list-group-item">{{ element.name }} {{ index }}</div>
-      </template>
-    </draggable>
-    <draggable class="list-group" :list="list2" group="people" @change="log" itemKey="name">
-      <template #item="{ element, index }">
-        <div class="list-group-item">{{ element.name }} {{ index }}</div>
-      </template>
-    </draggable>
-  </div>
+  <input type="file" @change="fileChange" />
 </template>
 <script lang="ts" setup>
-import { ref } from 'vue'
-import draggable from 'vuedraggable'
-const list1 = ref([
-  { name: 'John', id: 1 },
-  { name: 'Joao', id: 2 },
-  { name: 'Jean', id: 3 },
-  { name: 'Gerard', id: 4 }
-])
-const list2 = ref([
-  { name: 'Juan', id: 5 },
-  { name: 'Edgard', id: 6 },
-  { name: 'Johnson', id: 7 }
-])
-function log(evt) {
-  window.console.log(evt)
+import axios from 'axios'
+const chunkSize = 2 * 1024 * 1024
+const THREAD_SIZE = navigator.hardwareConcurrency || 4
+console.log(THREAD_SIZE)
+let fext = ''
+let fname = ''
+let results: any = []
+let finishCount = 0
+let fileName = ''
+async function fileChange(e: Event) {
+  const files = (e.target as HTMLInputElement).files
+  if (files?.length) {
+    const file = files[0]
+    fname = file.name.split('.')[0]
+    fext = file.name.split('.')[1]
+    fileName = file.name
+    const size = file.size
+    const maxChunkCount = Math.ceil(size / chunkSize)
+    const startTime = Date.now()
+
+    console.log(startTime)
+    const workChunkCount = Math.ceil(maxChunkCount / THREAD_SIZE)
+    for (let i = 0; i < THREAD_SIZE; i++) {
+      const startIndex = workChunkCount * i
+      const endIndex = Math.min(startIndex + workChunkCount, chunkSize)
+      const worker = new Worker(new URL('./worker.ts', import.meta.url), {
+        type: 'module'
+      })
+      worker.postMessage({
+        file,
+        startIndex,
+        endIndex,
+        chunkSize
+      })
+      worker.onmessage = async (e) => {
+        for (let i = startIndex; i < endIndex; i++) {
+          results[i] = e.data[i - startIndex]
+        }
+        worker.terminate()
+        finishCount++
+        if (finishCount === THREAD_SIZE) {
+          await Promise.all(
+            results.map(
+              (item: {
+                start: number
+                end: number
+                index: number
+                hash: string
+                blobChunk: Blob
+              }) => post(item)
+            )
+          )
+          console.log(Date.now() - startTime)
+          console.log('上传完成')
+          axios.post('http://localhost:3000/merge', {
+            name: fileName,
+            chunkNameList: results.map((result: { hash: string }) => result.hash)
+          })
+        }
+      }
+    }
+  }
+}
+function post({ hash, blobChunk }: { hash: string; blobChunk: Blob }) {
+  const blobFile = new File([blobChunk], `${fname}.${hash}.${fext}`)
+  const formData = new FormData()
+  formData.append('file', blobFile)
+  return axios.post('http://localhost:3000/upload', formData)
 }
 </script>
-<style scoped>
-.buttons {
-  margin-top: 35px;
-}
-
-.ghost {
-  opacity: 0.5;
-  background: #c8ebfb;
-}
-
-.not-draggable {
-  cursor: no-drop;
-}
-</style>
+<style scoped></style>
