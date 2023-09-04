@@ -1,1 +1,4 @@
-console.log("index3.js");
+function bbb() {
+  console.log(bbb.name);
+}
+export default bbb;
