@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "",
   "main": "index2.js",
-  "type": "module",
+  "type": "commonjs",
   "scripts": {
     "dev": "node index"
   },
